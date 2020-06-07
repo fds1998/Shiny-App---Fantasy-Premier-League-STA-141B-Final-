@@ -1,0 +1,381 @@
+######### NOTE ###########
+# Kindly read the readme.md file on github to fully understand and maximize the utilization of this application.
+
+
+library(jsonlite)
+library(shiny)
+library(tidyverse)
+library(htmltools)
+
+
+## Loading fpl api
+
+fpl <- "https://fantasy.premierleague.com/api/bootstrap-static/"
+json_fpl <- fromJSON(fpl,flatten = TRUE)
+
+# Recoding the team codes to team names
+
+m <- json_fpl$elements
+player_all_stats <- m %>% mutate(name = paste(first_name,second_name),team_name = recode(team,"1" = "Arsenal",
+                                                                                         "2" = "Aston Villa","3" = "Bournemouth",
+                                                                                         "4" = "Brighton","5" = "Burnley","6" = "Chelsea",
+                                                                                         "7" = "Crystal Palace","8" = "Everton",
+                                                                                         "9" = "Leicester","10" = "Liverpool",
+                                                                                         "11" = "Man City","12" = "Man Utd",
+                                                                                         "13" = "Newcastle","14" = "Norwich",
+                                                                                         "15" = "Sheffield Utd","16"="Southampton",
+                                                                                         "17"="Spurs","18"="Watford",
+                                                                                         "19"="West Ham","20"="Wolves"),
+                                 position = recode(element_type,"1" = "Goalkeeper","2" = "Defender","3" = "Midfielder","4" = "Forward"),
+                                 cost = (now_cost/10),avg_points_90 = (total_points/minutes)*90) %>% select(id,name,total_points,cost,points_per_game,minutes,
+                                                                                                            goals_scored, assists,transfers_in,team,team_name,element_type,position,second_name,avg_points_90) %>% arrange(team)
+
+player_all_stats <- player_all_stats %>% filter(total_points!= 0,minutes > 50)
+
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+    titlePanel('Fantasy Premier League 2019/20'),
+    sidebarLayout(
+        fluidRow(
+            column(5,wellPanel(
+                selectInput("club",
+                            label = "Club",
+                            choices = sort(unique(player_all_stats$team_name)),
+                            selected = (sort(unique(player_all_stats$team_name)))[10]),
+                selectInput("player_position",
+                            label = "Position",
+                            choices = c("-",sort(unique(player_all_stats$position))),
+                            selected = c("-")),
+                selectInput("price",
+                            label = "Max Cost (in millions)",
+                            choices = c("-",seq(4.0,13.0,by = 0.5)),
+                            selected = c("-")),
+                selectInput("player_name",
+                            label = "Player",
+                            choices = c("-",sort(unique(player_all_stats$name))),
+                            selected = c("-")),
+            ))
+        ),
+        mainPanel(
+            tabsetPanel(
+                type = "tabs",
+                tabPanel("Team Points Distribution",plotOutput("plot1")),
+                tabPanel("Players Points Distribution", plotOutput("plot2")),
+                tabPanel("Advanced Breakdiwn of points", plotOutput("plot3")),
+                tabPanel("Player breakdown by position and price", plotOutput("plot4")),
+                tabPanel("Player statistics", tableOutput("tbl1")),
+                tabPanel("Individual transfer analysis",plotOutput("plot5")),
+                tabPanel("Points by game week",plotOutput("plot6")),
+                id = "tabs"
+            )
+        )
+    )
+)
+
+
+
+
+# Define server logic required to draw a histogram
+server <- function(input, output,session) {
+    
+    observeEvent(input$club,{
+        club_name <- input$club
+        position_options <- input$player_position
+        name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name),]$name))
+        updateSelectInput(session, inputId="player_name",
+                          choices=c("-",name_of_player))
+        tabs_hide()
+        if((input$player_name == "-") & (input$player_position == "-")){
+            showTab(inputId = "tabs", target = "Team Points Distribution")
+            showTab(inputId = "tabs", target = "Players Points Distribution")
+            showTab(inputId = "tabs", target = "Advanced Breakdiwn of points")
+        }    
+    })
+    
+    observeEvent(c(input$club,input$player_position),{
+        club_name <- input$club
+        position_name <- input$player_position
+        if(position_name != "-"){
+            name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name & player_all_stats$position == position_name),]$name))
+            updateSelectInput(session, inputId="player_name",
+                              choices=c("-",name_of_player))
+        }else{
+            name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name),]$name))
+            updateSelectInput(session, inputId="player_name",
+                              choices=c("-",name_of_player))
+            
+        }
+        
+        tabs_hide()
+        if((input$player_name == "-") & (input$player_position != "-")){
+            showTab(inputId = "tabs", target = "Player breakdown by position and price")
+            showTab(inputId = "tabs", target = "Player statistics")
+        }    
+        if((input$player_name == "-") & (input$player_position == "-")){
+            showTab(inputId = "tabs", target = "Team Points Distribution")
+            showTab(inputId = "tabs", target = "Players Points Distribution")
+            showTab(inputId = "tabs", target = "Advanced Breakdiwn of points")
+        }    
+    })  
+    
+    observeEvent(c(input$club,input$player_position,input$price),{
+        
+        club_name <- input$club
+        position_name <- input$player_position
+        price_range <- input$price
+        name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name & player_all_stats$position == position_name &
+                                                                 player_all_stats$cost <= as.numeric(price_range)),]$name))
+        if(position_name == "-" & price_range == "-"){
+            name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name),]$name))
+        }
+        
+        if(position_name != "-" & price_range == "-"){
+            name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name
+                                                                 & player_all_stats$position == position_name),]$name))
+            
+        }
+        
+        
+        if(position_name == "-" & price_range != "-"){
+            name_of_player <- sort(unique(player_all_stats[which(player_all_stats$team_name == club_name &
+                                                                     player_all_stats$cost <= as.numeric(price_range)),]$name))
+        }
+        
+        updateSelectInput(session, inputId="player_name",
+                          choices=c("-",name_of_player))
+        
+        
+        
+        
+    })
+    
+    observeEvent(input$player_name,{
+        tabs_hide()
+        
+        if(input$player_name != "-"){
+            showTab(inputId = "tabs", target = "Individual transfer analysis")
+            showTab(inputId = "tabs", target = "Points by game week")
+        }    
+        if((input$player_name == "-") & (input$player_position != "-")){
+            showTab(inputId = "tabs", target = "Player breakdown by position and price")
+            showTab(inputId = "tabs", target = "Player statistics")
+        }    
+        if((input$player_name == "-") & (input$player_position == "-")){
+            showTab(inputId = "tabs", target = "Team Points Distribution")
+            showTab(inputId = "tabs", target = "Players Points Distribution")
+            showTab(inputId = "tabs", target = "Advanced Breakdiwn of points")
+        }    
+    })
+    
+    club_data <-reactive({
+        if(input$player_position == "-" & input$player_name == "-"){
+            if (input$price == "-"){
+                player_all_stats %>% filter(team_name == input$club)
+            } else
+            {
+                player_all_stats %>% filter(team_name == input$club, cost <= as.numeric(input$price) )
+            }
+        }
+    })
+    
+    # Histogram of points across positions
+    
+    output$plot1 <- renderPlot({
+        if(input$player_position == "-" & input$player_name == "-"){
+            ggplot(club_data(), aes(total_points, fill = position)) +
+                geom_histogram(binwidth = 10) +
+                xlab("Total Points")+
+                ylab("Number of players") +
+                if(input$price == "-"){
+                    ggtitle(paste("Distribution of points across positions for",input$club,"in Fantasy Premier League 2019-20"))
+                }else{
+                    ggtitle(paste("Distribution of points across positions for",input$club," players less than",input$price,"million in Fantasy Premier League 19/20"))
+                }
+                
+        }
+        
+        
+    })
+    
+    # Scatterplot of minutes played vs total points 
+    
+    output$plot2 <-  renderPlot({
+        if(input$player_position == "-" & input$player_name == "-"){
+            ggplot(club_data(), aes(minutes,total_points , color = "blue")) +
+                geom_point() + geom_text(aes(label = ifelse(minutes > 700,as.character(second_name),"")),hjust = 1, vjust = 2) +
+                scale_color_manual(values = c("blue")) +
+                xlab("Minutes played") +
+                ylab("Total Points") +
+                if(input$price == "-"){
+                    ggtitle(paste("Minutes played vs Total points for all",input$club,"players(labeled players have played > 700 minutes)"))
+                }else{
+                    ggtitle(paste("Minutes played vs Total points for all",input$club,"players less than",input$price,"million (labeled players have played > 700 minutes)"))
+                }
+        }
+        
+        
+    })
+    
+    # Jitter plot of Total points vs Price according to total pinutes played and position
+    
+    output$plot3 <-  renderPlot({
+        if(input$player_position == "-" & input$player_name == "-"){
+            ggplot(club_data(),aes(cost,total_points, color = position)) +
+                geom_point(aes(size = minutes), position = "jitter") +
+                xlab("Price") + ylab("Points") +
+                theme(legend.text=element_text(size=12)) +
+                if(input$price == ""){
+                    ggtitle(paste("Points vs Price Scatterplot with position and minutes played for",input$club, "players"))
+                    
+                }else{
+                    ggtitle(paste("Points vs Price Scatterplot with position and minutes played for",input$club, "players less than",input$price,"million")) 
+                    
+                }
+        }
+        
+        
+    })
+    
+    # Filtering players based on position 
+    
+    forward_data <-reactive({
+        if(input$player_position  != "-" & input$player_name == "-"){
+            if (input$price == "-"){
+                player_all_stats %>% filter(team_name == input$club,position == input$player_position)
+            }else{
+                player_all_stats %>% filter(team_name == input$club,position == input$player_position, cost <= as.numeric(input$price))
+                
+            }  
+        }
+    })
+    
+    # Barchart of Average points per game for every player in the selection position
+    
+    output$plot4 <-  renderPlot({
+        if(input$player_position != "-" & input$player_name == "-"){
+            ggplot(forward_data(),aes(x = reorder(second_name,avg_points_90),y = avg_points_90)) +
+                geom_bar(stat = "identity",width = 0.3,fill = "springgreen4")+
+                theme_minimal() + coord_flip() + theme(axis.text = element_text(size = 10)) +
+                ylab("Average Points per game") + xlab("Player name") +
+                if(input$price == "-"){
+                    ggtitle(paste("Average points per game for all",input$club,input$player_position,"(s) in Fantasy Premier League 19/20"))
+                }else{
+                    ggtitle(paste("Average points per game for",input$club,input$player_position,"(s) less than",input$price,"million in Fantasy Premier League 19/20"))
+                }
+        }
+        
+        
+    })
+    
+    
+    position_data <- reactive({
+        if(input$player_name == "-" & input$player_position != "-"){
+            if (input$price == "-"){
+                player_all_stats %>% filter(team_name == input$club, position == input$player_position)
+            } else
+            {
+                player_all_stats %>% filter(team_name == input$club, position == input$player_position, cost <= as.numeric(input$price))
+            }    
+        }
+    })
+    
+    # Summary of the price, goals and assists for all the players in the selected position (for the selected club)
+    
+    output$tbl1 <-  renderTable({
+        if(input$player_position != "-" & input$player_name == "-"){
+            position_data() %>% select(Player = name,Goals = goals_scored,Assists = assists, Price = cost)
+        }
+        
+        
+    })
+    
+    
+    
+    ##### INDIVIDUAL TRANSFER ANALYSIS
+    
+    # Using the fpl api to write a function which extracts trasfer information about every single player
+    
+    player_transfers <- function(player_id){
+        #browser()
+        json_data <- fromJSON(str_glue("https://fantasy.premierleague.com/api/element-summary/{player_id}/"))
+        player_info <- data.frame(do.call(cbind, lapply(select(json_data[2]$history,transfers_in,transfers_out,round,total_points), cbind)))
+        # Change each column from list to vector
+        player_info <- unnest(player_info, )
+        return(player_info)
+        
+    }
+    
+    
+    
+    transfer_data <-reactive({
+        if(input$player_name != "-"){
+            p_id = player_all_stats %>% filter(name == input$player_name)  %>% select(id)
+            player_transfers(p_id)
+        }
+    })
+    
+    # Line graph of transfers in and transfers out for the selected players in every gameweek 
+    
+    output$plot5 <-  renderPlot({
+        if(input$player_name != "-"){
+            ggplot() +
+                geom_line(data = transfer_data() , aes(x = 1:nrow(transfer_data()), y = X1,color = "blue"),size = 2) +
+                geom_line(data = transfer_data(), aes(x = 1:nrow(transfer_data()), y = X2,color = "red"), size = 2) +
+                xlab('Gameweek') +
+                ylab('Transfers') +
+                scale_x_continuous(breaks = 1:nrow(transfer_data())) +
+                scale_color_discrete(name = "Transfers",labels = c("Transfers in","Transfers out")) +
+                ggtitle( paste("Transfers in and Transfers out for",input$player_name,"across all Gameweeks in Fantasy Premier League 2019-20"))
+        }
+        
+        
+    })
+    
+    # Using the fpl api to write a function which extracts information about the scores of each player in every gameweek
+    
+    player_summary <- function(player_id){
+        json_data <- fromJSON(str_glue("https://fantasy.premierleague.com/api/element-summary/{player_id}/"))
+        player_score <- data.frame(do.call(cbind, lapply(select(json_data[2]$history,round,total_points), cbind)))
+        player_score <- unnest(player_score, )
+        return(player_score)
+    }
+    
+    player_score <-reactive({
+        if(input$player_name != "-"){
+            p_id = player_all_stats %>% filter(name == input$player_name)  %>% select(id)
+            player_summary(p_id)
+        }
+    })
+    
+    # Combination of barchart and line graph to depict the scores and variations in points for the selected player 
+    # in every gameweek
+    
+    output$plot6 <-  renderPlot({
+      if(input$player_name != "-"){
+        ggplot(data= player_score() %>% select(Matchweek = X1, points = X2) %>% group_by(Matchweek) %>% summarise(Points = sum(points)), aes(x=Matchweek, y=Points)) +
+          geom_bar(stat="identity",color = "white", fill="steelblue")+
+          geom_text(aes(label=Points), vjust=1.6, color="white", size=3.5)+
+          theme_minimal() +
+          geom_line(aes(y = Points), size = 0.6, color="red", group = 3) +
+          scale_x_continuous(breaks = 1:nrow(player_score())) +
+          ggtitle( paste("Points for",input$player_name,"across all Gameweeks in Fantasy Premier League 2019-20"))
+      }
+    })
+    
+    tabs_hide <- function(){
+        hideTab(inputId = "tabs", target = "Individual transfer analysis")
+        hideTab(inputId = "tabs", target = "Points by game week")
+        hideTab(inputId = "tabs", target = "Team Points Distribution")
+        hideTab(inputId = "tabs", target = "Players Points Distribution")
+        hideTab(inputId = "tabs", target = "Advanced Breakdiwn of points")
+        hideTab(inputId = "tabs", target = "Player breakdown by position and price")
+        hideTab(inputId = "tabs", target = "Player statistics")
+    }
+    
+    
+    
+}
+
+# Run the application
+
+shinyApp(ui = ui, server = server)
