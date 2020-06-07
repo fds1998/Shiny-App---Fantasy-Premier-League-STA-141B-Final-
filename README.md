@@ -1,4 +1,4 @@
-# Shiny-App-Fantasy-Premier-League-STA-141B-Final
+# Shiny App-Fantasy Premier League 2019/20 (STA-141B-Final)
 
 This app analyses the Fantasy Premier League season 2019/20. It is designed to specifically analyse all the 20 clubs as well as their players in terms of their performance as a fantasy asset using a variety of scoring metrics. The analysis includes position wise distribution of points of players, transfer history of players across all gameweeks, top scoring players in a given position for a club (which can be filtered according to cost), distribution of points based on minutes played and price, etc. All this is accomplished using a variety of data vizualisations such as jitterplot, barchart overlayed with line graphs, scatterplots, etc. Kindly read the following table to maximise your utilization of the application. It enlists all possible inputs and the respective outputs:
 
