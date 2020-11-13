@@ -1,7 +1,3 @@
-######### NOTE ###########
-# Kindly read the readme.md file on github to fully understand and maximize the utilization of this application.
-
-
 library(jsonlite)
 library(shiny)
 library(tidyverse)
@@ -17,14 +13,14 @@ json_fpl <- fromJSON(fpl,flatten = TRUE)
 
 m <- json_fpl$elements
 player_all_stats <- m %>% mutate(name = paste(first_name,second_name),team_name = recode(team,"1" = "Arsenal",
-                                                                                         "2" = "Aston Villa","3" = "Bournemouth",
-                                                                                         "4" = "Brighton","5" = "Burnley","6" = "Chelsea",
-                                                                                         "7" = "Crystal Palace","8" = "Everton",
-                                                                                         "9" = "Leicester","10" = "Liverpool",
-                                                                                         "11" = "Man City","12" = "Man Utd",
-                                                                                         "13" = "Newcastle","14" = "Norwich",
+                                                                                         "2" = "Aston Villa","3" = "Brighton",
+                                                                                         "4" = "Burnley","5" = "Chelsea",
+                                                                                         "6" = "Crystal Palace","7" = "Everton",
+                                                                                         "8" = "Fulham","9" = "Leicester City",
+                                                                                         "10" = "Leeds Utd","11" = "Liverpool","12" = "Man City",
+                                                                                         "13" = "Man Utd","14" = "Newcastle Utd",
                                                                                          "15" = "Sheffield Utd","16"="Southampton",
-                                                                                         "17"="Spurs","18"="Watford",
+                                                                                         "17"="Spurs","18"="West Brom",
                                                                                          "19"="West Ham","20"="Wolves"),
                                  position = recode(element_type,"1" = "Goalkeeper","2" = "Defender","3" = "Midfielder","4" = "Forward"),
                                  cost = (now_cost/10),avg_points_90 = (total_points/minutes)*90) %>% select(id,name,total_points,cost,points_per_game,minutes,
@@ -34,14 +30,14 @@ player_all_stats <- player_all_stats %>% filter(total_points!= 0,minutes > 50)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-    titlePanel('Fantasy Premier League 2019/20'),
+    titlePanel('Fantasy Premier League 2020/21'),
     sidebarLayout(
         fluidRow(
             column(5,wellPanel(
                 selectInput("club",
                             label = "Club",
                             choices = sort(unique(player_all_stats$team_name)),
-                            selected = (sort(unique(player_all_stats$team_name)))[10]),
+                            selected = (sort(unique(player_all_stats$team_name)))[11]),
                 selectInput("player_position",
                             label = "Position",
                             choices = c("-",sort(unique(player_all_stats$position))),
@@ -191,7 +187,7 @@ server <- function(input, output,session) {
                 }else{
                     ggtitle(paste("Distribution of points across positions for",input$club," players less than",input$price,"million in Fantasy Premier League 19/20"))
                 }
-                
+            
         }
         
         
@@ -202,7 +198,7 @@ server <- function(input, output,session) {
     output$plot2 <-  renderPlot({
         if(input$player_position == "-" & input$player_name == "-"){
             ggplot(club_data(), aes(minutes,total_points , color = "blue")) +
-                geom_point() + geom_text(aes(label = ifelse(minutes > 700,as.character(second_name),"")),hjust = 1, vjust = 2) +
+                geom_point() + geom_text(aes(label = ifelse(minutes > 150,as.character(second_name),"")),hjust = 1, vjust = 2) +
                 scale_color_manual(values = c("blue")) +
                 xlab("Minutes played") +
                 ylab("Total Points") +
@@ -351,15 +347,15 @@ server <- function(input, output,session) {
     # in every gameweek
     
     output$plot6 <-  renderPlot({
-      if(input$player_name != "-"){
-        ggplot(data= player_score() %>% select(Matchweek = X1, points = X2) %>% group_by(Matchweek) %>% summarise(Points = sum(points)), aes(x=Matchweek, y=Points)) +
-          geom_bar(stat="identity",color = "white", fill="steelblue")+
-          geom_text(aes(label=Points), vjust=1.6, color="white", size=3.5)+
-          theme_minimal() +
-          geom_line(aes(y = Points), size = 0.6, color="red", group = 3) +
-          scale_x_continuous(breaks = 1:nrow(player_score())) +
-          ggtitle( paste("Points for",input$player_name,"across all Gameweeks in Fantasy Premier League 2019-20"))
-      }
+        if(input$player_name != "-"){
+            ggplot(data= player_score() %>% select(Matchweek = X1, points = X2) %>% group_by(Matchweek) %>% summarise(Points = sum(points)), aes(x=Matchweek, y=Points)) +
+                geom_bar(stat="identity",color = "white", fill="steelblue")+
+                geom_text(aes(label=Points), vjust=1.6, color="white", size=3.5)+
+                theme_minimal() +
+                geom_line(aes(y = Points), size = 0.6, color="red", group = 3) +
+                scale_x_continuous(breaks = 1:nrow(player_score())) +
+                ggtitle( paste("Points for",input$player_name,"across all Gameweeks in Fantasy Premier League 2019-20"))
+        }
     })
     
     tabs_hide <- function(){
